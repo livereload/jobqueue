@@ -132,3 +132,18 @@ describe "JobQueue", ->
         "foo project:cute-action:foo"
       ]
       done()
+
+
+  describe '#getQueuedRequests', ->
+
+    it "should return an empty array for an empty queue", ->
+      assert.deepEqual new JobQueue().getQueuedRequests(), []
+
+    it "should return the requests of all added tasks, in order", ->
+      queue = new JobQueue()
+      queue.register { action: 'foo' }, ->
+      queue.register { action: 'bar' }, ->
+      queue.add { project: 'woot', action: 'foo' }
+      queue.add { project: 'cute', action: 'bar' }
+
+      assert.deepEqual queue.getQueuedRequests(), [{ project: 'woot', action: 'foo' }, { project: 'cute', action: 'bar' }]

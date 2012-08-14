@@ -67,6 +67,11 @@ class JobQueue extends EventEmitter
       throw new Error("No handlers match the added request: " + stringifyRequest(request))
 
 
+  # Returns all requests waiting for execution, in the order they will be executed in.
+  getQueuedRequests: ->
+    (job.request for job in @queue)
+
+
   # ### JobQueue private methods
 
 

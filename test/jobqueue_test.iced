@@ -2,6 +2,7 @@ assert   = require 'assert'
 JobQueue = require '../lib/jobqueue'
 
 
+# Creates a job queue set up for convenient testing.
 createJobQueue = ({ keys, logRunning, logComplete }) ->
   queue = new JobQueue()
   queue.log = []

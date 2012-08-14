@@ -68,17 +68,14 @@ describe "JobQueue", ->
     done()
 
 
-  it "should emit an error when adding a task that does not match any handlers", (done) ->
-    queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
+  it "should emit an error when adding a task that does not match any handlers", ->
+    queue = createJobQueue(keys: ['project', 'action'])
 
     queue.register { action: 'foo' }, queue.logRequest('foo')
 
-    await
-      queue.once 'error', defer(err, request)
+    assert.throws ->
       queue.add { project: 'woot', action: 'bar' }
-
-    assert.ok err.message.match /No handlers match/i
-    done()
+    , /No handlers match/i
 
 
   it "should merge two tasks with the same id", (done) ->

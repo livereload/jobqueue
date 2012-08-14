@@ -58,7 +58,7 @@ class JobQueue extends EventEmitter
       @addRequestToQueue request
       @schedule()
     else
-      @emit 'error', new Error("No handlers match the added request: " + stringifyRequest(request))
+      throw new Error("No handlers match the added request: " + stringifyRequest(request))
 
 
   # ### JobQueue private methods

@@ -42,20 +42,19 @@ class JobQueue extends EventEmitter
   # Requests to perform a job with the given attributes.
   add: (request) ->
     if handler = @findHandler(request)
-      request.handler = handler
-      request.id = handler.computeId(request)
-      debug "Adding job #{stringifyRequest request} with request id #{request.id}, handled by #{handler.id}"
+      job = new Job(request, handler)
+      debug "Adding #{job}"
 
-      if prior = @idsToJobs[request.id]
-        debug "Found existing job for request id '#{request.id}': #{stringifyRequest prior}"
-        if prior.handler == handler
-          handler.merge(request, prior)
-          @removeRequestFromQueues prior
-          debug "Merged the old job into the new one: #{stringifyRequest request}"
+      if priorJob = @idsToJobs[job.id]
+        debug "Found existing #{priorJob}"
+        if priorJob.handler == handler
+          job.consume(priorJob)
+          @removeJobFromQueues priorJob
+          debug "Merged the old job into the new one: #{job}"
         else
-          throw new Error("Attempted to add a request that matches another request with the same id, but different handler: id is '#{request.id}', request is #{stringifyRequest request}")
+          throw new Error("Attempted to add a job that matches another job with the same id, but different handler: new job #{job}, prior job #{priorJob}")
 
-      @addRequestToQueue request
+      @addJobToQueue job
       @schedule()
     else
       throw new Error("No handlers match the added request: " + stringifyRequest(request))
@@ -85,25 +84,25 @@ class JobQueue extends EventEmitter
   # Executes the next job in queue. When done, either schedules execution of the next job or emits
   # ‘drain’.
   executeNextJob: ->
-    if request = @extractNextQueuedRequest()
-      @executeJob(request)
+    if job = @extractNextQueuedJob()
+      @executeJob(job)
     else
       @scheduleOrEmitDrain()
 
 
   # Executes the given job. When done, either schedules execution of the next job or emits ‘drain’.
-  # Assumes that the given request has already been removed from the queue.
-  executeJob: (request) ->
+  # Assumes that the given job has already been removed from the queue.
+  executeJob: (job) ->
     # Mark the job as running (and announce the news)
-    @runningJob = request
-    @emit 'running', request
+    @runningJob = job
+    @emit 'running', job
 
     # Execute the job by running the handler function
-    await request.handler.func(request, defer())
+    await job.handler.func.call(job, job.request, defer())
 
     # Mark the job as completed (and announce the news)
     @runningJob = null
-    @emit 'complete', request
+    @emit 'complete', job
 
     # Fulfil our promise to reschedule or emit ‘drain’
     @scheduleOrEmitDrain()
@@ -118,26 +117,41 @@ class JobQueue extends EventEmitter
       @emit 'drain'
 
 
-  # Add the given request to the underlying data structure.
-  addRequestToQueue: (request) ->
-    @queue.push request
-    @idsToJobs[request.id] = request
+  # Add the given job to the underlying data structure.
+  addJobToQueue: (job) ->
+    @queue.push job
+    @idsToJobs[job.id] = job
 
 
-  # Remove the given request to the underlying data structure.
-  removeRequestFromQueues: (request) ->
-    if (index = @queue.indexOf request) >= 0
+  # Remove the given job to the underlying data structure.
+  removeJobFromQueues: (job) ->
+    if (index = @queue.indexOf job) >= 0
       @queue.splice index, 1
-    delete @idsToJobs[request.id]
+    delete @idsToJobs[job.id]
 
 
-  # Extract (i.e. remove and return) the next request from the underlying data structure.
-  extractNextQueuedRequest: ->
-    if request = @queue.shift()
-      delete @idsToJobs[request.id]
-      request
+  # Extract (i.e. remove and return) the next job from the underlying data structure.
+  extractNextQueuedJob: ->
+    if job = @queue.shift()
+      delete @idsToJobs[job.id]
+      job
     else
       null
+
+
+# ### Job
+
+# Wraps a request and associates it with a specific handler. Only instantiated by the JobQueue, but
+# is visible to outside clients.
+class Job
+  constructor: (@request, @handler) ->
+    @id = @handler.computeId(@request)
+
+  consume: (priorJob) ->
+    @handler.merge(@request, priorJob.request)
+
+  toString: ->
+    "Job(id = #{@id}, handler = #{@handler.id}, request = #{stringifyRequest @request})"
 
 
 # ### JobHandler
@@ -158,21 +172,21 @@ class JobHandler
   computeId: (request) ->
     ("#{key}:#{request[key]}" for key in @idKeys).join('-')
 
-  merge: (request, prior) ->
-    for own key, oldValue of prior
+  merge: (request, priorRequest) ->
+    for own key, oldValue of priorRequest
       newValue = request[key]
       if newValue != oldValue
         if (Array.isArray newValue) and (Array.isArray oldValue)
           newValue.splice 0, 0, oldValue...
           continue
-        throw new Error "No default strategy for merging key '#{key}' of old request into new request; request id is #{request.id}, old request is #{stringifyRequest prior}, new request is #{stringifyRequest request}"
+        throw new Error "No default strategy for merging key '#{key}' of old request into new request; request id is #{request.id}, old request is #{stringifyRequest priorRequest}, new request is #{stringifyRequest request}"
 
 
 # ### Helper functions (public API for debugging and testing purposes only)
 
 # Returns a string representation of the given request for debugging and logging purposes.
 JobQueue.stringifyRequest = stringifyRequest = (request) ->
-  ("#{key}:#{stringifyValue value}" for own key, value of request when !(key in ['id', 'handler'])).join('-')
+  ("#{key}:#{stringifyValue value}" for own key, value of request).join('-')
 
 # Returns a string representation of the given value. (We don't want to use JSON.stringify because
 # it might throw, and this method should be useful for debugging errors that involve garbage

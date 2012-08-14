@@ -9,11 +9,11 @@ createJobQueue = ({ keys, logRunning, logComplete }) ->
   stringifyRequest = (request) -> ("#{key}:#{JobQueue.stringifyValue request[key]}" for key in keys when request[key]).join('-')
 
   if logRunning
-    queue.on 'running', (id, request) ->
-      queue.log.push "running #{id} #{stringifyRequest request}"
+    queue.on 'running', (request) ->
+      queue.log.push "running #{request.handler.id} #{stringifyRequest request}"
   if logComplete
-    queue.on 'complete', (id, request) ->
-      queue.log.push "complete #{id} #{stringifyRequest request}"
+    queue.on 'complete', (request) ->
+      queue.log.push "complete #{request.handler.id} #{stringifyRequest request}"
 
   queue.logRequest = (kw) ->
     (request, callback) ->

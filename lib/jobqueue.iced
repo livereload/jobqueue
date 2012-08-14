@@ -96,14 +96,14 @@ class JobQueue extends EventEmitter
   executeJob: (request) ->
     # Mark the job as running (and announce the news)
     @runningJob = request
-    @emit 'running', request.handler.id, request
+    @emit 'running', request
 
     # Execute the job by running the handler function
     await request.handler.func(request, defer())
 
     # Mark the job as completed (and announce the news)
     @runningJob = null
-    @emit 'complete', request.handler.id, request
+    @emit 'complete', request
 
     # Fulfil our promise to reschedule or emit ‘drain’
     @scheduleOrEmitDrain()

@@ -2,18 +2,18 @@ assert   = require 'assert'
 JobQueue = require '../lib/jobqueue'
 
 
-createJobQueue = ({ keys }) ->
+createJobQueue = ({ keys, logRunning, logComplete }) ->
   queue = new JobQueue()
   queue.log = []
 
   stringifyRequest = (request) -> (" #{key}=#{request[key]}" for key in keys when request[key]).join('')
 
-  queue.on 'running', (id, request) ->
-    queue.log.push "running #{id}#{stringifyRequest request}"
-  queue.on 'complete', (id, request) ->
-    queue.log.push "complete #{id}#{stringifyRequest request}"
-  queue.on 'drain', ->
-    queue.log.push "drain"
+  if logRunning
+    queue.on 'running', (id, request) ->
+      queue.log.push "running #{id}#{stringifyRequest request}"
+  if logComplete
+    queue.on 'complete', (id, request) ->
+      queue.log.push "complete #{id}#{stringifyRequest request}"
 
   queue.logRequest = (kw) ->
     (request, callback) ->
@@ -29,7 +29,7 @@ createJobQueue = ({ keys }) ->
 describe "JobQueue", ->
 
   it "should run a simple task", (done) ->
-    queue = createJobQueue(keys: ['project', 'action'])
+    queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
 
     queue.register { action: 'foo' }, queue.logRequest('foo')
 
@@ -41,14 +41,12 @@ describe "JobQueue", ->
       'running action:foo project=woot action=foo'
       'foo project=woot action=foo'
       'complete action:foo project=woot action=foo'
-
-      'drain'
     ]
     done()
 
 
   it "should run two simple tasks", (done) ->
-    queue = createJobQueue(keys: ['project', 'action'])
+    queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
 
     queue.register { action: 'foo' }, queue.logRequest('foo')
     queue.register { action: 'bar' }, queue.logRequest('bar')
@@ -66,7 +64,5 @@ describe "JobQueue", ->
       'running action:bar project=woot action=bar'
       'bar project=woot action=bar'
       'complete action:bar project=woot action=bar'
-
-      'drain'
     ]
     done()

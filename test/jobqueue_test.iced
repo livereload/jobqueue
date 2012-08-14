@@ -111,3 +111,21 @@ describe "JobQueue", ->
       "foo action:foo-flag:true-files:[ 'x.txt', 'y.txt' ]"
     ]
     done()
+
+
+  it "should allow to override the idKeys", (done) ->
+    idKeys = ['project', 'action']
+    queue  = createJobQueue(keys: idKeys)
+
+    queue.register { action: 'foo' }, { idKeys }, queue.logRequest('foo')
+
+    await
+      queue.once 'drain', defer()
+      queue.add { project: 'woot', action: 'foo' }
+      queue.add { project: 'cute', action: 'foo' }
+
+    queue.assert [
+      "foo project:woot-action:foo"
+      "foo project:cute-action:foo"
+    ]
+    done()

@@ -167,7 +167,7 @@ class Job
 # scope and options.
 class JobHandler
   constructor: (@scope, options, @func) ->
-    @idKeys = (key for own key of @scope).sort()
+    @idKeys = options.idKeys || (key for own key of @scope).sort()
     @id = ("#{key}:#{value}" for own key, value of @scope).sort().join('-')
 
     @merge = options.merge || @defaultMerge

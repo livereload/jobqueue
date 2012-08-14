@@ -66,3 +66,16 @@ describe "JobQueue", ->
       'complete action:bar project=woot action=bar'
     ]
     done()
+
+
+  it "should emit an error when adding a task that does not match any handlers", (done) ->
+    queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
+
+    queue.register { action: 'foo' }, queue.logRequest('foo')
+
+    await
+      queue.once 'error', defer(err, request)
+      queue.add { project: 'woot', action: 'bar' }
+
+    assert.ok err.message.match /No handlers match/i
+    done()

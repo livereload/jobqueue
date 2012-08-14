@@ -39,6 +39,8 @@ class JobQueue extends EventEmitter
       request.id = handler.computeId(request)
       @queue.push request
       @schedule()
+    else
+      @emit 'error', new Error("No handlers match the added request: " + stringifyRequest(request))
 
 
   # ### JobQueue private methods
@@ -115,3 +117,10 @@ class JobHandler
 
   computeId: (request) ->
     (('' + request[key]) for key of @idKeys).join('-')
+
+
+# ### Helper functions
+
+# Returns a string representation of the given request for debugging and logging purposes.
+stringifyRequest = (request) ->
+  ("#{key}:#{value}" for own key, value of request).join(':')

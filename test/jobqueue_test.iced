@@ -29,104 +29,106 @@ createJobQueue = ({ keys, logRunning, logComplete }) ->
 
 describe "JobQueue", ->
 
-  it "should run a simple task", (done) ->
-    queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
+  describe '#add', ->
 
-    queue.register { action: 'foo' }, queue.logRequest('foo')
+    it "should add and execute a single task", (done) ->
+      queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
 
-    await
-      queue.once 'drain', defer()
-      queue.add { project: 'woot', action: 'foo' }
+      queue.register { action: 'foo' }, queue.logRequest('foo')
 
-    queue.assert [
-      'running action:foo project:woot-action:foo'
-      'foo project:woot-action:foo'
-      'complete action:foo project:woot-action:foo'
-    ]
-    done()
+      await
+        queue.once 'drain', defer()
+        queue.add { project: 'woot', action: 'foo' }
 
-
-  it "should run two simple tasks", (done) ->
-    queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
-
-    queue.register { action: 'foo' }, queue.logRequest('foo')
-    queue.register { action: 'bar' }, queue.logRequest('bar')
-
-    await
-      queue.once 'drain', defer()
-      queue.add { project: 'woot', action: 'foo' }
-      queue.add { project: 'woot', action: 'bar' }
-
-    queue.assert [
-      'running action:foo project:woot-action:foo'
-      'foo project:woot-action:foo'
-      'complete action:foo project:woot-action:foo'
-
-      'running action:bar project:woot-action:bar'
-      'bar project:woot-action:bar'
-      'complete action:bar project:woot-action:bar'
-    ]
-    done()
+      queue.assert [
+        'running action:foo project:woot-action:foo'
+        'foo project:woot-action:foo'
+        'complete action:foo project:woot-action:foo'
+      ]
+      done()
 
 
-  it "should emit an error when adding a task that does not match any handlers", ->
-    queue = createJobQueue(keys: ['project', 'action'])
+    it "should add and execute two tasks serially", (done) ->
+      queue = createJobQueue(keys: ['project', 'action'], logRunning: yes, logComplete: yes)
 
-    queue.register { action: 'foo' }, queue.logRequest('foo')
+      queue.register { action: 'foo' }, queue.logRequest('foo')
+      queue.register { action: 'bar' }, queue.logRequest('bar')
 
-    assert.throws ->
-      queue.add { project: 'woot', action: 'bar' }
-    , /No handlers match/i
+      await
+        queue.once 'drain', defer()
+        queue.add { project: 'woot', action: 'foo' }
+        queue.add { project: 'woot', action: 'bar' }
 
+      queue.assert [
+        'running action:foo project:woot-action:foo'
+        'foo project:woot-action:foo'
+        'complete action:foo project:woot-action:foo'
 
-  it "should merge two tasks with the same id", (done) ->
-    queue = createJobQueue(keys: ['project', 'action'])
-
-    queue.register { action: 'foo' }, queue.logRequest('foo')
-
-    await
-      queue.once 'drain', defer()
-      queue.add { project: ['woot'], action: 'foo' }
-      queue.add { project: ['cute'], action: 'foo' }
-
-    queue.assert [
-      "foo project:[ 'woot', 'cute' ]-action:foo"
-    ]
-    done()
+        'running action:bar project:woot-action:bar'
+        'bar project:woot-action:bar'
+        'complete action:bar project:woot-action:bar'
+      ]
+      done()
 
 
-  it "should merge with a custom merge handler", (done) ->
-    queue = createJobQueue(keys: ['action', 'flag', 'files'])
+    it "should emit an error when adding a task that does not match any handlers", ->
+      queue = createJobQueue(keys: ['project', 'action'])
 
-    merge = (a, b) ->
-      a.flag ||= b.flag
-      a.files.splice(0, 0, b.files...)
-    queue.register { action: 'foo' }, { merge }, queue.logRequest('foo')
+      queue.register { action: 'foo' }, queue.logRequest('foo')
 
-    await
-      queue.once 'drain', defer()
-      queue.add { action: 'foo', flag: yes, files: ['x.txt'] }
-      queue.add { action: 'foo', flag: no,  files: ['y.txt'] }
-
-    queue.assert [
-      "foo action:foo-flag:true-files:[ 'x.txt', 'y.txt' ]"
-    ]
-    done()
+      assert.throws ->
+        queue.add { project: 'woot', action: 'bar' }
+      , /No handlers match/i
 
 
-  it "should allow to override the idKeys", (done) ->
-    idKeys = ['project', 'action']
-    queue  = createJobQueue(keys: idKeys)
+    it "should merge two tasks with the same id", (done) ->
+      queue = createJobQueue(keys: ['project', 'action'])
 
-    queue.register { action: 'foo' }, { idKeys }, queue.logRequest('foo')
+      queue.register { action: 'foo' }, queue.logRequest('foo')
 
-    await
-      queue.once 'drain', defer()
-      queue.add { project: 'woot', action: 'foo' }
-      queue.add { project: 'cute', action: 'foo' }
+      await
+        queue.once 'drain', defer()
+        queue.add { project: ['woot'], action: 'foo' }
+        queue.add { project: ['cute'], action: 'foo' }
 
-    queue.assert [
-      "foo project:woot-action:foo"
-      "foo project:cute-action:foo"
-    ]
-    done()
+      queue.assert [
+        "foo project:[ 'woot', 'cute' ]-action:foo"
+      ]
+      done()
+
+
+    it "should merge tasks with a custom merge handler when one is provided", (done) ->
+      queue = createJobQueue(keys: ['action', 'flag', 'files'])
+
+      merge = (a, b) ->
+        a.flag ||= b.flag
+        a.files.splice(0, 0, b.files...)
+      queue.register { action: 'foo' }, { merge }, queue.logRequest('foo')
+
+      await
+        queue.once 'drain', defer()
+        queue.add { action: 'foo', flag: yes, files: ['x.txt'] }
+        queue.add { action: 'foo', flag: no,  files: ['y.txt'] }
+
+      queue.assert [
+        "foo action:foo-flag:true-files:[ 'x.txt', 'y.txt' ]"
+      ]
+      done()
+
+
+    it "should not merge tasks that have different ids because of custom idKeys", (done) ->
+      idKeys = ['project', 'action']
+      queue  = createJobQueue(keys: idKeys)
+
+      queue.register { action: 'foo' }, { idKeys }, queue.logRequest('foo')
+
+      await
+        queue.once 'drain', defer()
+        queue.add { project: 'woot', action: 'foo' }
+        queue.add { project: 'cute', action: 'foo' }
+
+      queue.assert [
+        "foo project:woot-action:foo"
+        "foo project:cute-action:foo"
+      ]
+      done()

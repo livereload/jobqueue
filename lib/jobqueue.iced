@@ -24,9 +24,12 @@ class JobQueue extends EventEmitter
   add: (request) ->
     if handler = @findHandler(request)
       request.id = handler.computeId(request)
-      process.nextTick =>
-        handler.func(request)
-        @emit 'drain'
+      await process.nextTick defer()
+
+      @emit 'running', handler.id, request
+      await handler.func(request, defer())
+      @emit 'complete', handler.id, request
+      @emit 'drain'
 
   # ### JobQueue private methods
 
@@ -45,6 +48,7 @@ class JobQueue extends EventEmitter
 class JobHandler
   constructor: (@scope, @func) ->
     @idKeys = (key for own key of @scope).sort()
+    @id = ("#{key}:#{value}" for own key, value of @scope).sort().join(':')
 
   matches: (request) ->
     for own key, value of @scope

@@ -92,3 +92,22 @@ describe "JobQueue", ->
       "foo project:[ 'woot', 'cute' ]-action:foo"
     ]
     done()
+
+
+  it "should merge with a custom merge handler", (done) ->
+    queue = createJobQueue(keys: ['action', 'flag', 'files'])
+
+    merge = (a, b) ->
+      a.flag ||= b.flag
+      a.files.splice(0, 0, b.files...)
+    queue.register { action: 'foo' }, { merge }, queue.logRequest('foo')
+
+    await
+      queue.once 'drain', defer()
+      queue.add { action: 'foo', flag: yes, files: ['x.txt'] }
+      queue.add { action: 'foo', flag: no,  files: ['y.txt'] }
+
+    queue.assert [
+      "foo action:foo-flag:true-files:[ 'x.txt', 'y.txt' ]"
+    ]
+    done()

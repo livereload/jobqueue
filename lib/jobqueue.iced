@@ -27,14 +27,21 @@ class JobQueue extends EventEmitter
     @runningJob = null
 
 
-  # Registers the given func to run for all requests that match the given scope.
-  register: (scope, func) ->
-    unless typeof scope is 'object'
-      throw new TypeError("JobQueue.register(scope, func) scope arg must be an object")
-    unless typeof func is 'function'
-      throw new TypeError("JobQueue.register(scope, func) func arg must be a function")
+  # Registers the given func to run for all requests that match the given scope. The second argument
+  # is optional.
+  register: (scope, options, func) ->
+    if (typeof func is 'undefined') and (typeof options is 'function')
+      func = options
+      options = {}
 
-    handler = new JobHandler(scope, func)
+    unless typeof scope is 'object'
+      throw new TypeError("JobQueue.register(scope, [options], func) scope arg must be an object")
+    unless typeof options is 'object'
+      throw new TypeError("JobQueue.register(scope, [options], func) options arg must be an object")
+    unless typeof func is 'function'
+      throw new TypeError("JobQueue.register(scope, [options], func) func arg must be a function")
+
+    handler = new JobHandler(scope, options, func)
     @handlers.push handler
     debug "Registered handler #{handler.id} with ID keys #{JSON.stringify(handler.idKeys)}"
 
@@ -159,9 +166,11 @@ class Job
 # A private helper class that stores a handler registered via `JobQueue#register`, together with its
 # scope and options.
 class JobHandler
-  constructor: (@scope, @func) ->
+  constructor: (@scope, options, @func) ->
     @idKeys = (key for own key of @scope).sort()
     @id = ("#{key}:#{value}" for own key, value of @scope).sort().join('-')
+
+    @merge = options.merge || @defaultMerge
 
   matches: (request) ->
     for own key, value of @scope
@@ -172,7 +181,7 @@ class JobHandler
   computeId: (request) ->
     ("#{key}:#{request[key]}" for key in @idKeys).join('-')
 
-  merge: (request, priorRequest) ->
+  defaultMerge: (request, priorRequest) ->
     for own key, oldValue of priorRequest
       newValue = request[key]
       if newValue != oldValue

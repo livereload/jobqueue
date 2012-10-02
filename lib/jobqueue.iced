@@ -72,6 +72,12 @@ class JobQueue extends EventEmitter
     (job.request for job in @queue)
 
 
+  # Emits 'drain' event if no jobs are scheduled or running.
+  checkDrain: ->
+    if !@runningJob and @queue.length is 0
+      @emit 'drain'
+
+
   # ### JobQueue private methods
 
 

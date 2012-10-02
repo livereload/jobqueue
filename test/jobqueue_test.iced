@@ -134,6 +134,65 @@ describe "JobQueue", ->
       done()
 
 
+  describe "#checkDrain", ->
+
+    it "should emit 'drain' if no tasks have been scheduled", (done) ->
+      queue = createJobQueue(keys: ['project', 'action'])
+      queue.register { action: 'foo' }, queue.logRequest('foo')
+
+      await
+        queue.once 'drain', defer()
+        queue.checkDrain()
+
+      queue.assert []
+      done()
+
+    it "shouldn't emit 'drain' if there's a scheduled task", (done) ->
+      queue = createJobQueue(keys: ['action'])
+      queue.register { action: 'foo' }, queue.logRequest('foo')
+
+      await
+        queue.add { action: 'foo' }
+
+        cb = defer()
+        queue.once 'drain', ->
+          queue.log.push 'drain'
+          cb()
+        queue.checkDrain()
+        queue.log.push 'not yet'
+
+      queue.assert [
+        "not yet"
+        "foo action:foo"
+        "drain"
+      ]
+      done()
+
+    it "shouldn't emit 'drain' if there's a running task", (done) ->
+      queue = createJobQueue(keys: ['action'])
+      queue.register { action: 'foo' }, (request, done) ->
+        queue.log.push 'foo:start'
+        queue.checkDrain()
+        queue.log.push 'foo:end'
+        done()
+
+      await
+        queue.add { action: 'foo' }
+
+        cb = defer()
+        queue.once 'drain', ->
+          queue.log.push 'drain'
+          cb()
+
+      queue.assert [
+        "foo:start"
+        "foo:end"
+        "drain"
+      ]
+      done()
+
+
+
   describe '#getQueuedRequests', ->
 
     it "should return an empty array for an empty queue", ->

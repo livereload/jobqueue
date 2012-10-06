@@ -105,7 +105,7 @@ class JobQueue extends EventEmitter
     if job = @extractNextQueuedJob()
       @executeJob(job)
     else
-      @scheduleOrEmitDrain()
+      @emit 'drain'
 
 
   # Executes the given job. When done, either schedules execution of the next job or emits ‘drain’.
@@ -123,16 +123,7 @@ class JobQueue extends EventEmitter
     @emit 'complete', job
 
     # Fulfil our promise to reschedule or emit ‘drain’
-    @scheduleOrEmitDrain()
-
-
-  # Depending on whether any more jobs are left in queue, either calls `#schedule` to schedule
-  # execution on next tick, or emits ‘drain’ event.
-  scheduleOrEmitDrain: ->
-    if @queue.length > 0
-      @schedule()
-    else
-      @emit 'drain'
+    @schedule()
 
 
   # Add the given job to the underlying data structure.

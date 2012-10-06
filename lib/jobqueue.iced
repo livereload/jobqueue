@@ -23,6 +23,9 @@ class JobQueue extends EventEmitter
     # Is execution of the next job on `process.nextTick` already scheduled?
     @scheduled = no
 
+    # Is adding new jobs currently prohibited? This happens during execution of 'empty' event.
+    @prohibition = no
+
     # The currently running job or `null`.
     @runningJob = null
 
@@ -48,6 +51,8 @@ class JobQueue extends EventEmitter
 
   # Requests to perform a job with the given attributes.
   add: (request) ->
+    if @prohibition
+      throw new Error "Adding new jobs during 'empty' event is not allowed"
     if handler = @findHandler(request)
       job = new Job(request, handler)
       debug "Adding #{job}"
@@ -72,10 +77,10 @@ class JobQueue extends EventEmitter
     (job.request for job in @queue)
 
 
-  # Emits 'drain' event if no jobs are scheduled or running.
+  # Makes sure 'drain' and 'empty' events will be emitted some time later
+  # (even if the queue has long been empty).
   checkDrain: ->
-    if !@runningJob and @queue.length is 0
-      @emit 'drain'
+    @schedule()
 
 
   # ### JobQueue private methods
@@ -102,10 +107,19 @@ class JobQueue extends EventEmitter
   # Executes the next job in queue. When done, either schedules execution of the next job or emits
   # ‘drain’.
   executeNextJob: ->
+    debug "executeNextJob"
     if job = @extractNextQueuedJob()
       @executeJob(job)
     else
+      # handlers of 'drain' event are allowed to add more jobs
       @emit 'drain'
+      if !@scheduled
+        # handlers of 'empty' event aren't allowed to add more jobs; this event means "we're really actually drained"
+        @prohibition = yes
+        try
+          @emit 'empty'
+        finally
+          @prohibition = no
 
 
   # Executes the given job. When done, either schedules execution of the next job or emits ‘drain’.
@@ -114,6 +128,8 @@ class JobQueue extends EventEmitter
     # Mark the job as running (and announce the news)
     @runningJob = job
     @emit 'running', job
+
+    debug "Running #{job}"
 
     # Execute the job by running the handler function
     await job.handler.func.call(job, job.request, defer())

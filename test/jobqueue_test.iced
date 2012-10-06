@@ -206,3 +206,39 @@ describe "JobQueue", ->
       queue.add { project: 'cute', action: 'bar' }
 
       assert.deepEqual queue.getQueuedRequests(), [{ project: 'woot', action: 'foo' }, { project: 'cute', action: 'bar' }]
+
+
+  describe "'empty' event", (done) ->
+
+    it "should be emitted when the queue gets drained, after the drain event", ->
+      queue = createJobQueue(keys: ['action'])
+      queue.register { action: 'foo' }, queue.logRequest('foo')
+      queue.add { action: 'foo' }
+      queue.on 'drain', -> queue.log.push 'drain'
+      queue.on 'empty', -> queue.log.push 'empty'
+
+      await queue.once 'empty', defer()
+      queue.assert [
+        "foo action:foo"
+        "drain"
+        "empty"
+      ]
+
+    it "should be emitted once at the very end if more jobs get added by 'drain' handlers", ->
+      queue = createJobQueue(keys: ['action'])
+      queue.register { action: 'foo' }, queue.logRequest('foo')
+      queue.add { action: 'foo' }
+      queue.on 'drain', -> queue.log.push 'drain'
+      queue.on 'empty', -> queue.log.push 'empty'
+
+      queue.once 'drain', ->
+        queue.add { action: 'foo' }
+
+      await queue.once 'empty', defer()
+      queue.assert [
+        "foo action:foo"
+        "drain"
+        "foo action:foo"
+        "drain"
+        "empty"
+      ]

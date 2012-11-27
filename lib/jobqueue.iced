@@ -78,13 +78,17 @@ class JobQueue extends EventEmitter
 
 
   # use this to add more jobs when the current ones complete
-  checkpoint: (func) ->
-    @once 'drain', func
+  checkpoint: (func, description='') ->
+    @once 'drain', =>
+      debug "checkpoint(#{description})"
+      func()
     @schedule()  # make sure it is called even if the queue is empty
 
   # this type of handler isn't allowed to add more jobs
-  after: (func) ->
-    @once 'empty', func
+  after: (func, description='') ->
+    @once 'empty', =>
+      debug "after(#{description})"
+      func()
     @schedule()  # make sure it is called even if the queue is empty
 
 

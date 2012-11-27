@@ -77,10 +77,12 @@ class JobQueue extends EventEmitter
     (job.request for job in @queue)
 
 
-  # Makes sure 'drain' and 'empty' events will be emitted some time later
-  # (even if the queue has long been empty).
-  checkDrain: ->
-    @schedule()
+  # TODO: handle the case when there are multiple 'after' handlers, and some of them add more tasks
+  # (fundamentally, handlers that add tasks want to be called in reverse order, but handlers that expect
+  # all the work to really be complete want to be called in forward order)
+  after: (func) ->
+    @once 'drain', func
+    @schedule()  # make sure it is called even if the queue is empty
 
 
   # ### JobQueue private methods

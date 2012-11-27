@@ -134,20 +134,18 @@ describe "JobQueue", ->
       done()
 
 
-  describe "#checkDrain", ->
+  describe "#after(func)", ->
 
-    it "should emit 'drain' if no tasks have been scheduled", (done) ->
+    it "should call func if no tasks have been scheduled", (done) ->
       queue = createJobQueue(keys: ['project', 'action'])
       queue.register { action: 'foo' }, queue.logRequest('foo')
 
-      await
-        queue.once 'drain', defer()
-        queue.checkDrain()
+      await queue.after defer()
 
       queue.assert []
       done()
 
-    it "shouldn't emit 'drain' if there's a scheduled task", (done) ->
+    it "shouldn't call func until an already scheduled task completes", (done) ->
       queue = createJobQueue(keys: ['action'])
       queue.register { action: 'foo' }, queue.logRequest('foo')
 
@@ -155,39 +153,38 @@ describe "JobQueue", ->
         queue.add { action: 'foo' }
 
         cb = defer()
-        queue.once 'drain', ->
-          queue.log.push 'drain'
+        queue.after ->
+          queue.log.push 'after'
           cb()
-        queue.checkDrain()
         queue.log.push 'not yet'
 
       queue.assert [
         "not yet"
         "foo action:foo"
-        "drain"
+        "after"
       ]
       done()
 
-    it "shouldn't emit 'drain' if there's a running task", (done) ->
+    it "shouldn't call func until a running task completes", (done) ->
       queue = createJobQueue(keys: ['action'])
-      queue.register { action: 'foo' }, (request, done) ->
-        queue.log.push 'foo:start'
-        queue.checkDrain()
-        queue.log.push 'foo:end'
-        done()
 
       await
-        queue.add { action: 'foo' }
-
         cb = defer()
-        queue.once 'drain', ->
-          queue.log.push 'drain'
-          cb()
+
+        queue.register { action: 'foo' }, (request, done) ->
+          queue.log.push 'foo:start'
+          queue.after ->
+            queue.log.push 'after'
+            cb()
+          queue.log.push 'foo:end'
+          done()
+
+        queue.add { action: 'foo' }
 
       queue.assert [
         "foo:start"
         "foo:end"
-        "drain"
+        "after"
       ]
       done()
 

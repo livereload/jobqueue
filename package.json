@@ -2,7 +2,7 @@
   "author": "Andrey Tarantsov <andrey@tarantsov.com>",
   "name": "jobqueue",
   "description": "Job Queue for serial processing of tasks in apps like LiveReload",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "main": "lib/jobqueue.js",
   "scripts": {
     "test": "./node_modules/mocha/bin/mocha -R ${REPORTER-spec}"

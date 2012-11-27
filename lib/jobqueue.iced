@@ -77,11 +77,14 @@ class JobQueue extends EventEmitter
     (job.request for job in @queue)
 
 
-  # TODO: handle the case when there are multiple 'after' handlers, and some of them add more tasks
-  # (fundamentally, handlers that add tasks want to be called in reverse order, but handlers that expect
-  # all the work to really be complete want to be called in forward order)
-  after: (func) ->
+  # use this to add more jobs when the current ones complete
+  checkpoint: (func) ->
     @once 'drain', func
+    @schedule()  # make sure it is called even if the queue is empty
+
+  # this type of handler isn't allowed to add more jobs
+  after: (func) ->
+    @once 'empty', func
     @schedule()  # make sure it is called even if the queue is empty
 
 

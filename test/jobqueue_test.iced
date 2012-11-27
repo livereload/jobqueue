@@ -134,12 +134,13 @@ describe "JobQueue", ->
       done()
 
 
-  describe "#after(func)", ->
+  describe "#after(func) and #checkpoint(func)", ->
 
     it "should call func if no tasks have been scheduled", (done) ->
       queue = createJobQueue(keys: ['project', 'action'])
       queue.register { action: 'foo' }, queue.logRequest('foo')
 
+      await queue.checkpoint defer()
       await queue.after defer()
 
       queue.assert []
@@ -153,14 +154,18 @@ describe "JobQueue", ->
         queue.add { action: 'foo' }
 
         cb = defer()
+        queue.checkpoint ->
+          queue.log.push 'checkpoint'
         queue.after ->
           queue.log.push 'after'
           cb()
+
         queue.log.push 'not yet'
 
       queue.assert [
         "not yet"
         "foo action:foo"
+        "checkpoint"
         "after"
       ]
       done()
@@ -173,6 +178,8 @@ describe "JobQueue", ->
 
         queue.register { action: 'foo' }, (request, done) ->
           queue.log.push 'foo:start'
+          queue.checkpoint ->
+            queue.log.push 'checkpoint'
           queue.after ->
             queue.log.push 'after'
             cb()
@@ -184,9 +191,35 @@ describe "JobQueue", ->
       queue.assert [
         "foo:start"
         "foo:end"
+        "checkpoint"
         "after"
       ]
       done()
+
+
+  describe "#empty(func)", (done) ->
+
+    it "should call func only after completion of all additional jobs added by #checkpoint() callbacks", ->
+      queue = createJobQueue(keys: ['action'])
+      queue.register { action: 'foo' }, queue.logRequest('foo')
+      queue.add { action: 'foo' }
+      queue.after -> queue.log.push 'after'
+
+      queue.checkpoint ->
+        queue.log.push 'checkpoint 1'
+        queue.add { action: 'foo' }
+
+        queue.checkpoint ->
+          queue.log.push 'checkpoint 2'
+
+      await queue.after defer()
+      queue.assert [
+        "foo action:foo"
+        "checkpoint 1"
+        "foo action:foo"
+        "checkpoint 2"
+        "after"
+      ]
 
 
 
@@ -203,39 +236,3 @@ describe "JobQueue", ->
       queue.add { project: 'cute', action: 'bar' }
 
       assert.deepEqual queue.getQueuedRequests(), [{ project: 'woot', action: 'foo' }, { project: 'cute', action: 'bar' }]
-
-
-  describe "'empty' event", (done) ->
-
-    it "should be emitted when the queue gets drained, after the drain event", ->
-      queue = createJobQueue(keys: ['action'])
-      queue.register { action: 'foo' }, queue.logRequest('foo')
-      queue.add { action: 'foo' }
-      queue.on 'drain', -> queue.log.push 'drain'
-      queue.on 'empty', -> queue.log.push 'empty'
-
-      await queue.once 'empty', defer()
-      queue.assert [
-        "foo action:foo"
-        "drain"
-        "empty"
-      ]
-
-    it "should be emitted once at the very end if more jobs get added by 'drain' handlers", ->
-      queue = createJobQueue(keys: ['action'])
-      queue.register { action: 'foo' }, queue.logRequest('foo')
-      queue.add { action: 'foo' }
-      queue.on 'drain', -> queue.log.push 'drain'
-      queue.on 'empty', -> queue.log.push 'empty'
-
-      queue.once 'drain', ->
-        queue.add { action: 'foo' }
-
-      await queue.once 'empty', defer()
-      queue.assert [
-        "foo action:foo"
-        "drain"
-        "foo action:foo"
-        "drain"
-        "empty"
-      ]
